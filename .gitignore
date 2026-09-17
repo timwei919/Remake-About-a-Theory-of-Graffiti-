@@ -9,3 +9,16 @@ private/
 
 # macOS
 .DS_Store
+
+# 非公開:vault 根目錄的原始檔與暫存
+/*.mov
+/*.MOV
+/*.HEIC
+/*.zip
+/*.pdf
+/Pasted image *.png
+
+# 非公開:log 底下只收 jpg / png / mp4,原始檔不進 git
+log/media/**/*.HEIC
+log/media/**/*.MOV
+log/media/**/*.mov
