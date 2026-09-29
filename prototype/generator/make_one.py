@@ -9,11 +9,11 @@ import numpy as np
 
 HERE      = os.path.dirname(os.path.abspath(__file__))
 MODEL     = os.path.join(HERE, "model.pkl")
-OUT_DIR   = os.path.expanduser("~/graffiti/output")
+OUT_DIR   = os.path.expanduser("~/Desktop")
 OUT_NAME  = "latest.svg"
 W_MM, H_MM = 300.0, 230.0     # 描画サイズ(mm)
 MARGIN    = 10.0              # 余白(mm)
-STROKE_MM = 1.2               # 線の太さ(mm)
+STROKE_MM = 0.4               # 線の太さ(mm)
 TEMPERATURE = 0.5             # ばらつき(小さいほど学習データに近い)
 
 # ---------- 生成 ----------
