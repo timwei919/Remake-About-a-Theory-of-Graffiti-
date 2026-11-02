@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-落書き生成（2026年10月28日 版）
+落書き生成（2026年11月2日 版）
 
 写真から取り出した一筆の線を分類し、その線を混ぜて新しい線を作り、
 文字・単語・段という構造で並べて、1枚の落書きを生成する。
@@ -31,8 +31,8 @@ K = 7                      # 分類のグループ数
 
 # 描画面の実寸（mm）。黒いフレームの内側。
 # 横長で使う前提。縦長で使うならこの2行を入れ替える。
-MM_W = 860                 # 横
-MM_H = 820                 # 縦
+MM_W = 1030                # 横
+MM_H = 710                 # 縦
 
 ROW_H = 1.15               # 1段の高さ（落書き全体の高さ=1 のスケール）
 NROW  = 2                  # 段数
@@ -40,19 +40,52 @@ H = ROW_H * NROW
 W = H * MM_W / MM_H
 
 P = dict(
-    nrow   = 2,            # 段数（1 or 2）。1なら1段でキャンバス全体を使う
-    nword  = (2, 4),       # 全体の単語の数（2〜3）
-    nlet   = (2, 4),       # 1単語の文字数（2〜3）
-    nstk   = (1, 3),       # 1文字を作る線の数（1〜2）
-    lsize  = 0.60,         # 1文字の高さ（段の高さに対する割合）
+    nrow   = None,         # 段数。None なら p1row の確率で 1 か 2 を引く
+    p1row  = 0.30,         # 1段になる確率（1段のときは大きく少なく置かれる）
+    nword  = (2, 4),       # 2段のときの単語の数（2〜3）
+    nword1 = (1, 3),       # 1段のときの単語の数（1〜2）
+    nline  = (5, 11),      # 線の本数がこの範囲（5〜10本）に入るまで作り直す。
+                           # None なら制限なし。途中で打ち切らないので形は変わらない
+    aspect = (1.20, 1.70), # 絵の縦横比（横/縦）がこの範囲に入るまで作り直す。
+                           # 枠は 1.395。外れるほど上下か左右に余白が出る
+    fillgap= True,         # 空いているところに線を足して埋める
+    fillto = 0.30,         # どこまで埋めるか（空白の正方形がこの大きさ以下になるまで）
+    fillmax= 3,            # 足してよい本数の上限（線の本数の上限も超えない）
+    fillsize= 0.80,        # 足す文字の大きさ（空白の正方形に対する割合）
+    maxhole= 0.50,         # 絵の中に空いてよい正方形の大きさ（枠に対する割合）。
+                           # 小さくすると、中に大きな空白のある絵が出なくなる
+    ntry   = 400,          # 何回まで作り直すか
+    nlet   = (2, 9),       # 1単語の文字数（2〜8）
+    gapmax = 0.30,         # 文字どうしを離してよい上限（文字の高さに対する割合）
+    fillw  = 0.00,         # 単語の長さを「段の中の持ち分の幅」に合わせる度合い。
+                           # 0 なら文字数は nlet から引くだけ（段がガラ空きになりうる）
+    loose  = 0.45,         # 横の置き場所の自由さ。0=持ち場にきっちり / 1=全幅のどこでも
+    xspread= 1.00,         # 段の中の単語を、位置だけ横に引き伸ばして端に合わせる度合い。
+                           # 0 なら何もしない。形も大きさも変わらず、すきまだけ広がる
+    xletmax= 0.15,         # 文字どうしを広げてよい上限（文字の幅に対する割合）
+    xmargin= 0.04,         # 横に広げるときに残す余白
+    ymargin= 0.04,         # 段の帯を作るときに上下に残す余白         # そのときに残す左右の余白（枠の幅に対する割合）
+    rowsplit= True,        # 2段のとき、上下の帯を分けて交わらないようにする
+    rowsep = 0.03,         # そのときの段と段のすきま（枠の高さに対する割合）
+    rowlap = 0.25,         # rowsplit=False のときだけ使う。段の間隔の詰め方
+    yjit   = 0.12,         # 段の中での上下の揺れ（段の高さに対する割合）
+    cap    = 1.60,         # 枠に合わせて拡大してよい上限（1.0 なら拡大しない）
+    pstk   = (0.55, 0.30, 0.15),   # 1文字が何本の線でできるかの確率（1本/2本/3本）
+                                   # 文字ごとに引き直す。密な文字と開いた文字が混ざる
+    lsize  = 0.95,         # 1文字の高さ（段の高さに対する割合）の基準
+    lsize1 = 0.95,         # 1段のときの1文字の高さ。1段だと段の高さ＝枠の高さなので
+                           # lsize のままだと文字が2倍になってしまう
+    lvar   = (0.70, 1.25), # 文字ごとの高さのばらつき。広げると高さが揃わなくなる
     gap    = -0.15,        # 文字どうしの重なり（文字の高さに対する割合）
     spread = 0.35,         # 1文字の中で線をずらす幅
     nseg   = (4, 9),       # 1本の線を作るのに繋ぐ断片の数（4〜8）
-    turns  = (0.6, 1.0),   # 1本の線が回る量（周）
+    turns  = (0.8, 1.3),   # 1本の線が回る量（周）。2本以上でできる字に使う
+    turns1 = (1.1, 1.6),   # 1本だけでできる字に使う。その1本で形にするので大きく回す   # 1本の線が回る量（周）
     maxper = 60.0,         # 繋ぎ目で配る角度の上限（度）。折り返し防止
     tilt   = 0.40,         # 文字を縦に立てるときの傾きの幅（ラジアン）
     frac   = 0.15,         # 繋いだ線をならす強さ
     ndot   = (0, 2),       # ポツンと置く小さい線の数（0〜1）
+    dnear  = 0.18,         # ポツンと置く線を、他の線からどれくらい離してよいか
     dsize  = 0.13,         # その線の大きさ（キャンバスの高さに対する割合）
     mix    = 3,            # 形を混ぜるときに使う線の数（1ならコピー）
     t      = 0.05,         # 形のばらつき（線の大きさに対する割合）
@@ -218,20 +251,21 @@ def save_model(path="model.pkl"):
     with open(path, "wb") as f:
         pickle.dump(dict(A32=A32, LAB=LAB, SZ=SZ, X=X, P=P,
                          MM_W=MM_W, MM_H=MM_H, ROW_H=ROW_H, NROW=NROW,
-                         version="2026-10-28"), f)
+                         version="2026-11-02"), f)
     return path
 
 
 def load_model(path="model.pkl"):
-    """学習結果を読み込む。生成だけならこれでよい"""
-    global A32, LAB, SZ, X, P, MM_W, MM_H, ROW_H, NROW, H, W
+    """学習結果を読み込む。生成だけならこれでよい。
+
+    読むのは学習で得たもの（線とその分類）だけ。
+    設定（P・寸法）はこのファイルの上のほうに書いてあるものを使う。
+    model.pkl にも古い設定が入っているが、意図的に無視している
+    （入れてしまうと、このファイルの P を書き換えても効かなくなるため）。
+    """
+    global A32, LAB, SZ, X
     d = pickle.load(open(path, "rb"))
     A32, LAB, SZ, X = d["A32"], d["LAB"], d["SZ"], d["X"]
-    P = dict(d["P"])
-    MM_W, MM_H = d["MM_W"], d["MM_H"]
-    ROW_H, NROW = d["ROW_H"], d["NROW"]
-    H = ROW_H * NROW
-    W = H * MM_W / MM_H
     _derive()
     return dict(strokes=len(A32), groups=int(LAB.max()) + 1,
                 version=d.get("version", "?"))
@@ -284,13 +318,26 @@ def build_round(rng, p):
     return relax(np.vstack(pts), p["frac"])
 
 
-def make_letter(rng, p, size):
-    """文字 = 丸い線を1〜2本重ね、縦に立てて、高さを size に合わせたもの"""
+def make_letter(rng, p, size, maxstk=None):
+    """文字 = 丸い線を何本か重ね、縦に立てて、高さを size に合わせたもの。
+
+    何本重ねるかは pstk の確率で引く。文字ごとに引き直すので、
+    1本だけの開いた文字と、何本も重なった密な文字が混ざる。
+    """
     base = build_round(rng, p)
     base = base - base.mean(0)
     s0   = max(np.ptp(base[:, 0]), np.ptp(base[:, 1]), 1e-9)
     L    = [base]
-    for _ in range(int(rng.integers(*p["nstk"])) - 1):
+    w    = np.asarray(p["pstk"], float)
+    nst  = 1 + int(rng.choice(len(w), p=w / w.sum()))
+    if maxstk is not None:
+        nst = max(1, min(nst, int(maxstk)))
+
+    # 1本でできる字は、その1本だけで字の形にならないといけないので、よく回す。
+    # 2〜3本重なる字は、重なりで形になるのでそこまで回さなくてよい。
+    if nst == 1 and p.get("turns1") is not None:
+        p = {**p, "turns": p["turns1"]}
+    for _ in range(nst - 1):
         q = build_round(rng, p)
         q = q - q.mean(0)
         q = q * (s0 / max(np.ptp(q[:, 0]), np.ptp(q[:, 1]), 1e-9)) * rng.uniform(0.6, 1.1)
@@ -302,77 +349,312 @@ def make_letter(rng, p, size):
     L   = [rot(q - ctr, tgt - principal_angle(a)) for q in L]
 
     a = np.vstack(L)
-    k = size * rng.uniform(0.85, 1.15) / max(np.ptp(a[:, 1]), 1e-9)
+    k = size * rng.uniform(*p["lvar"]) / max(np.ptp(a[:, 1]), 1e-9)
     return [q * k for q in L]
 
 
-def make_word(rng, p, size):
-    """単語 = 文字が2〜3個、重なって横に並んだもの"""
-    parts, x0 = [], 0.0
-    for _ in range(int(rng.integers(*p["nlet"]))):
-        L   = make_letter(rng, p, size)
+def make_word(rng, p, size, target=None, budget=None):
+    """単語 = 文字が何個か横に並んだもの。
+
+    budget … この単語に割り当てられた線の本数。使い切るまで文字を足す。
+    target … 届かせたい横幅。文字数ではなく「文字どうしの間隔」で合わせる。
+             間隔は gapmax までしか開かない（開きすぎると単語に見えなくなるため）。
+    """
+    hi = max(1, p["nlet"][1] - 1)
+
+    Ls, used = [], 0
+    if budget is None:
+        # 本数の予算を使わないとき：文字数を一度だけ引く
+        n = int(rng.integers(*p["nlet"])) if target is None else hi
+        for i in range(n):
+            Ls.append(make_letter(rng, p, size))
+            if target is not None and i + 1 >= p["nlet"][0]:
+                w = sum(float(np.ptp(np.vstack(L)[:, 0])) for L in Ls)
+                if w + p["gap"] * size * i >= target:
+                    break
+    else:
+        while len(Ls) < hi and used < budget:
+            L = make_letter(rng, p, size, maxstk=budget - used)
+            used += len(L)
+            Ls.append(L)
+
+    # 素の間隔で並べたときの幅を見て、足りなければ間隔を開く
+    wds = [float(np.ptp(np.vstack(L)[:, 0])) for L in Ls]
+    g   = p["gap"] * size
+    if target is not None and len(Ls) > 1:
+        need = (target - sum(wds)) / (len(Ls) - 1)
+        g    = float(np.clip(need, g, p["gapmax"] * size))
+
+    out, x0 = [], 0.0
+    for L in Ls:
         a   = np.vstack(L)
         off = np.array([x0 - a[:, 0].min(), -a[:, 1].min()])
         L   = [q + off for q in L]
-        parts += L
-        x0 = max(q[:, 0].max() for q in L) + p["gap"] * size
-    return parts
-
-
-def add_dots(out, rng, p):
-    """小さい線を、そのまま変な場所にポツンと置く"""
-    for _ in range(int(rng.integers(*p["ndot"]))):
-        s = jitter(pick_shape(int(rng.choice(SMALL, p=WSM)), rng, p["mix"]), p["t"], rng)
-        s = s - s.mean(0)
-        s = s * (p["dsize"] * H / max(np.ptp(s[:, 0]), np.ptp(s[:, 1]), 1e-9))
-        out.append(s + np.array([rng.uniform(0.08, 0.92) * W,
-                                 rng.uniform(0.08, 0.92) * H]))
+        out.append(L)                      # 文字ごとにまとめて返す
+        x0 = max(q[:, 0].max() for q in L) + g
     return out
 
 
-def shrink_to_fit(g, margin=0.04):
-    """枠からはみ出したときだけ縮める（拡大はしない）"""
+def add_dots(out, rng, p, n=None):
+    """小さい線をポツンと置く。ただし他の形の近くにだけ置く。
+    離れた場所に1本だけ独立して描かれることは実際の落書きでは起きないため。"""
+    n = int(rng.integers(*p["ndot"])) if n is None else int(n)
+    if n <= 0 or not out:
+        return out
+
+    for _ in range(n):
+        s = jitter(pick_shape(int(rng.choice(SMALL, p=WSM)), rng, p["mix"]), p["t"], rng)
+        s = s - s.mean(0)
+        s = s * (p["dsize"] * H / max(np.ptp(s[:, 0]), np.ptp(s[:, 1]), 1e-9))
+
+        # すでに置いてある線を1本選び、その近くに置く
+        host = out[int(rng.integers(len(out)))]
+        base = host[int(rng.integers(len(host)))]
+        ang  = rng.uniform(-np.pi, np.pi)
+        r    = p["dnear"] * H * rng.uniform(0.5, 1.0)
+        pos  = base + np.array([np.cos(ang), np.sin(ang)]) * r
+        out.append(s + pos)
+    return out
+
+
+def fit_to_frame(g, cap=1.0, margin=0.04):
+    """枠に合わせて大きさを揃える。
+
+    cap は拡大してよい上限。cap=1.0 なら縮めるだけ（旧 shrink_to_fit と同じ）。
+    cap>1.0 なら、枠より小さく生まれた絵を cap 倍まで広げて余白を減らす。
+    """
     a      = np.vstack(g)
     lo, hi = a.min(0), a.max(0)
     ext    = np.maximum(hi - lo, 1e-9)
-    k      = min(1.0, W * (1 - 2 * margin) / ext[0], H * (1 - 2 * margin) / ext[1])
+    k      = min(cap, W * (1 - 2 * margin) / ext[0], H * (1 - 2 * margin) / ext[1])
     off    = np.array([W, H]) / 2 - (lo + hi) / 2 * k
     return [q * k + off for q in g]
 
 
 def generate(seed=None, fit_frame=True, **kw):
-    """落書きを1枚作る。戻り値は線のリスト（各要素は (n,2) の座標）"""
+    """落書きを1枚作る。戻り値は線のリスト（各要素は (n,2) の座標）
+
+    nline = (lo, hi) を入れると、線の本数がその範囲に入るまで作り直す。
+    途中で打ち切らないので、形は本数を指定しないときと同じ性質のまま。
+    ntry 回ためして入らなければ、いちばん近かったものを返す。
+    """
     if A32 is None:
         raise RuntimeError("先に fit() か load_model() を呼んでください")
 
-    p   = {**P, **kw}
-    rng = np.random.default_rng(seed)
-    nr  = p["nrow"]
-    rh  = H / nr
-    nw  = int(rng.integers(*p["nword"]))
+    p    = {**P, **kw}
+    rng  = np.random.default_rng(seed)
+    want = p["nline"]
 
+    asp  = p["aspect"]
+    free = want is None and asp is None and p["maxhole"] is None
+
+    # 段数は最初に1回だけ引いて、作り直しの間は変えない。
+    # 作り直すたびに引くと、条件を通りやすい段数（1段）ばかりが残ってしまう。
+    p = dict(p)
+    if p["nrow"] is None:
+        p["nrow"] = 1 if rng.random() < p["p1row"] else 2
+    best, bestd = None, None
+    for _ in range(1 if free else int(p["ntry"])):
+        out = _compose(rng, p)
+        d   = 0.0
+
+        if want is not None:                       # 線の本数
+            n = len(out)
+            if n < want[0]:
+                d += (want[0] - n) / max(want[0], 1)
+            elif n >= want[1]:
+                d += (n - want[1] + 1) / max(want[1], 1)
+
+        if p["maxhole"] is not None:               # 絵の中に空く穴の大きさ
+            h = _hole(out)
+            if h > p["maxhole"]:
+                # 条件を全部は満たせないとき、大きな穴がいちばん困るので重く見る
+                d += 3.0 * (h - p["maxhole"]) / p["maxhole"]
+
+        if asp is not None:                        # 絵の縦横比
+            q = np.vstack(out)
+            e = np.maximum(q.max(0) - q.min(0), 1e-9)
+            r = e[0] / e[1]
+            if r < asp[0]:
+                d += (asp[0] - r) / asp[0]
+            elif r > asp[1]:
+                d += (r - asp[1]) / asp[1]
+
+        if d == 0.0:
+            best = out
+            break
+        if bestd is None or d < bestd:
+            best, bestd = out, d
+
+    return fit_to_frame(best, p["cap"]) if fit_frame else best
+
+
+def _hole(g, n=8, where=False):
+    """絵の中にできる「線が1本も通らない正方形」の大きさ。
+    枠を n x n のマスに切って測る。0.5 なら枠の半分の辺の正方形が空いている。"""
+    q  = np.vstack(g)
+    gx = np.clip((q[:, 0] / W * n).astype(int), 0, n - 1)
+    gy = np.clip((q[:, 1] / H * n).astype(int), 0, n - 1)
+    c  = np.zeros((n, n), bool)
+    c[gy, gx] = True
+
+    best, bi, bj = 0, 0, 0
+    for i in range(n):
+        for j in range(n):
+            k = best + 1
+            while i + k <= n and j + k <= n and not c[i:i + k, j:j + k].any():
+                best, bi, bj = k, i, j
+                k += 1
+    if not where:
+        return best / n
+    # 空いている正方形の中心（絵の座標）
+    cy = (bi + best / 2) / n * H
+    cx = (bj + best / 2) / n * W
+    return best / n, cx, cy
+
+
+def _fill_holes(out, rng, p):
+    """空いているところに線を足して埋める。
+
+    いちばん大きな空白の正方形を探し、その真ん中に文字をひとつ置く。
+    maxhole 以下になるか、線の本数が上限に達したら止める。
+    """
+    if not p["fillgap"] or not out:
+        return out
+
+    nmax = (p["nline"][1] - 1) if p["nline"] else 99
+    for _ in range(int(p["fillmax"])):
+        if len(out) >= nmax:
+            break
+        h, cx, cy = _hole(out, where=True)
+        if h <= p["fillto"]:
+            break
+
+        size = h * H * p["fillsize"]
+        L    = make_letter(rng, p, size)
+        a    = np.vstack(L)
+        off  = np.array([cx, cy]) - (a.min(0) + a.max(0)) / 2
+        out += [q + off for q in L]
+    return out
+
+
+def _compose(rng, p):
+    """1枚ぶんの線を組む（枠への収めはしない）"""
+    nr = p["nrow"]
+    rh = H / nr
+
+    nw    = int(rng.integers(*(p["nword1"] if nr == 1 else p["nword"])))
     share = [0] * nr
     for i in range(nw):
         share[i % nr] += 1
 
+    lz  = p["loose"]
     out = []
     for r in range(nr):
-        if share[r] == 0:
-            continue
-        words = [make_word(rng, p, rh * p["lsize"]) for _ in range(share[r])]
-        wid   = [np.ptp(np.vstack(w)[:, 0]) for w in words]
-        free  = max(W - sum(wid), 0.0)
-        sp    = rng.dirichlet(np.ones(share[r] + 1)) * free
-        x = sp[0]
-        for i, wrd in enumerate(words):
-            a   = np.vstack(wrd)
-            off = np.array([x - a[:, 0].min(),
-                            r * rh + (rh - np.ptp(a[:, 1])) * rng.random() - a[:, 1].min()])
-            out += [q + off for q in wrd]
-            x   += wid[i] + sp[i + 1]
+        n   = share[r]
+        row = []
+        for i in range(n):
+            # lsize は段の高さに対する割合なので、1段だと文字が2倍になってしまう。
+            # 1段のときは lsize1 を使う。
+            ls     = p["lsize1"] if (nr == 1 and p.get("lsize1")) else p["lsize"]
+            wrd    = make_word(rng, p, rh * ls)        # 文字のリスト
+            a      = np.vstack([q for L in wrd for q in L])
+            wd, ht = np.ptp(a[:, 0]), np.ptp(a[:, 1])
 
-    out = add_dots(out, rng, p)
-    return shrink_to_fit(out) if fit_frame else out
+            # 横：持ち場の中心はそのまま、幅だけ loose で広げる
+            hw = 0.5 / n * (1 + lz * (n - 1))
+            cx = (i + 0.5) / n + (2 * rng.random() - 1) * hw
+            x  = float(np.clip(cx, 0.0, 1.0)) * max(W - wd, 0.0)
+
+            # 縦の置き方
+            if nr > 1 and p["rowsplit"]:
+                # 段ごとに帯を分け、上下が交わらないようにする。
+                # 帯より高い単語は、その単語だけ縮めて帯に収める（形は変わらない）。
+                # 枠いっぱいに作ると、あとで fit_to_frame が余白を作るために
+                # 全体を縮めてしまう。最初から余白のぶん内側に帯を作る。
+                vm  = p["ymargin"] * H
+                sep = p["rowsep"] * H
+                bh  = (H - 2 * vm - sep * (nr - 1)) / nr
+                blo = vm + r * (bh + sep)
+                if ht > bh:
+                    k      = bh / ht
+                    wrd    = [[q * k for q in L] for L in wrd]
+                    a      = np.vstack([q for L in wrd for q in L])
+                    wd, ht = np.ptp(a[:, 0]), np.ptp(a[:, 1])
+                    x      = float(np.clip(cx, 0.0, 1.0)) * max(W - wd, 0.0)
+                y = blo + (bh - ht) * rng.random()
+            else:
+                pitch = rh * (1 - p["rowlap"])
+                cy    = (H / 2 + (r - (nr - 1) / 2) * pitch
+                         + (2 * rng.random() - 1) * p["yjit"] * rh)
+                y     = float(np.clip(cy - ht / 2, 0.0, max(H - ht, 0.0)))
+
+            off = np.array([x - a[:, 0].min(), y - a[:, 1].min()])
+            row.append([[q + off for q in L] for L in wrd])   # 単語 → 文字 → 線
+
+        out += _spread_x(row, p, rng)
+
+    out = _fill_holes(out, rng, p)
+    return add_dots(out, rng, p)
+
+
+def _shift(items, d):
+    return [[q + np.array([d, 0.0]) for q in L] for L in items]
+
+
+def _spread_x(row, p, rng):
+    """段の中身を横に広げて枠の端に合わせる。
+
+    まず単語どうしのすきまを広げる（文字の間隔は変わらない）。
+    それでも届かないぶんだけ、文字どうしを広げる。ただし xletmax まで。
+    形も大きさも変えない。動かすのは位置だけ。
+    """
+    words = [w for w in row if w]
+    flat  = [q for w in words for L in w for q in L]
+    if not flat or p["xspread"] <= 0:
+        return flat
+
+    m  = p["xmargin"] * W
+    ta, tb = m, W - m
+
+    def span(ws):
+        xs = [q[:, 0] for w in ws for L in w for q in L]
+        return min(x.min() for x in xs), max(x.max() for x in xs)
+
+    # ── 1段目：単語どうしを広げる
+    if len(words) > 1:
+        wl = [min(q[:, 0].min() for L in w for q in L) for w in words]
+        wr = [max(q[:, 0].max() for L in w for q in L) for w in words]
+        order = sorted(range(len(words)), key=lambda i: wl[i])
+        need  = (tb - ta) - sum(wr[i] - wl[i] for i in order)
+        if need > 0:
+            step = need / (len(order) - 1) if len(order) > 1 else 0.0
+            x = ta
+            new = [None] * len(words)
+            for i in order:
+                new[i] = _shift(words[i], x - wl[i])
+                x += (wr[i] - wl[i]) + step * p["xspread"]
+            words = new
+
+    # ── 2段目：まだ届かなければ、文字どうしを広げる（上限つき）
+    a, b = span(words)
+    if (tb - ta) - (b - a) > 1e-9:
+        lets = [L for w in words for L in w]
+        if len(lets) > 1:
+            ll = [min(q[:, 0].min() for q in L) for L in lets]
+            lr = [max(q[:, 0].max() for q in L) for L in lets]
+            order = sorted(range(len(lets)), key=lambda i: ll[i])
+            need  = (tb - ta) - sum(lr[i] - ll[i] for i in order)
+            step  = max(need, 0.0) / max(len(order) - 1, 1)
+            cap   = p["xletmax"] * np.median([lr[i] - ll[i] for i in order])
+            step  = min(step * p["xspread"], cap)
+            x, out = a, []
+            for i in order:
+                out += [q + np.array([x - ll[i], 0.0]) for q in lets[i]]
+                x += (lr[i] - ll[i]) + step
+            return out
+
+    return [q for w in words for L in w for q in L]
 
 
 # ======================================================================
