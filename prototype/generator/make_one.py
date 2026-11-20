@@ -6,7 +6,7 @@
     python3 make_one.py            # 毎回ちがう絵
     python3 make_one.py 12         # 同じ番号なら毎回同じ絵（確認用）
 
-出力: ~/graffiti/output/latest.svg （820 × 860 mm）
+出力: ~/graffiti/output/latest.svg （横 1330 × 縦 1030 mm）
 """
 
 import os
